@@ -48,9 +48,6 @@ class ShardStreamReader:
 
         while True:
             res = await self.connection.xread(streams_to_last_seen, block=0)
-            if not res:
-                continue
-
             for stream_key, entries in res.items():
                 event_cls = streams_to_class[stream_key]
 

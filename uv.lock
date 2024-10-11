@@ -4,7 +4,7 @@ requires-python = ">=3.10"
 [[package]]
 name = "disagain"
 version = "0.1.0"
-source = { git = "https://github.com/sharp-eyes/disagain.git#74a81faa560dcacad2590bcb24fa0e01b4c03341" }
+source = { git = "https://github.com/sharp-eyes/disagain.git#996a34de63f54d110779526a6224740f67ac6560" }
 
 [[package]]
 name = "fishmael"
