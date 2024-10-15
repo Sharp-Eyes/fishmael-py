@@ -13,6 +13,10 @@ source = { editable = "." }
 dependencies = [
     { name = "disagain" },
     { name = "python-dotenv" },
+]
+
+[package.dev-dependencies]
+dev = [
     { name = "ruff" },
 ]
 
@@ -20,8 +24,10 @@ dependencies = [
 requires-dist = [
     { name = "disagain", git = "https://github.com/sharp-eyes/disagain.git" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "ruff", specifier = ">=0.6.8" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.6.9" }]
 
 [[package]]
 name = "python-dotenv"

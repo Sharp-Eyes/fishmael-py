@@ -7,12 +7,16 @@ requires-python = ">=3.10"
 dependencies = [
     "disagain",
     "python-dotenv>=1.0.1",
-    "ruff>=0.6.8",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.6.9",
+]
 
 [tool.uv.sources]
 disagain = { git = "https://github.com/sharp-eyes/disagain.git" }
