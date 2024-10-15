@@ -11,31 +11,14 @@ import fishmael
 
 async def main() -> None:
     dotenv.load_dotenv()
-    redis_url = os.environ["REDIS_URL"]
-    client = disagain.Redis.from_url(redis_url)
 
-    # For demonstration, make two streams that each handle one event type.
-    readers = [
-        fishmael.stream.ShardStreamReader.for_streams(
-            fishmael.models.CommandInteraction,
-            connection=await client.get_connection(),
-            shard=fishmael.models.ShardId(0, 1),
-        ),
-        fishmael.stream.ShardStreamReader.for_streams(
-            fishmael.models.ComponentInteraction,
-            connection=await client.get_connection(),
-            shard=fishmael.models.ShardId(0, 1),
-        ),
-    ]
-
-    # TODO: More convenient instantiation: e.g. default method that reads desired
-    #       events from fishmael.toml and makes one reader for them per shard
-    client = Fishmael(readers)
+    client = await Fishmael.from_env()
     await client.start()
 
 
 @dataclasses.dataclass
 class Fishmael:
+    redis: disagain.Redis
     stream_readers: collections.abc.Sequence[fishmael.stream.ShardStreamReader]
 
     _stream_tasks: set[asyncio.Task[None]] = dataclasses.field(
@@ -48,6 +31,52 @@ class Fishmael:
         init=False,
         repr=False,
     )
+
+    @classmethod
+    async def from_env(
+        cls,
+        *shards: fishmael.models.ShardId,
+        redis: disagain.Redis | tuple[str, int] | str | None = None,
+    ) -> "Fishmael":
+        # First ensure we have an active redis connection...
+        if isinstance(redis, disagain.Redis):
+            pass
+
+        elif isinstance(redis, tuple):
+            redis = disagain.Redis(*redis)
+
+        elif isinstance(redis, str):
+            redis = disagain.Redis.from_url(redis)
+
+        elif "REDIS_URL" in os.environ:
+            redis = disagain.Redis.from_url(os.environ["REDIS_URL"])
+
+        else:
+            msg = (
+                "Please set the `REDIS_URL` environment variable, or"
+                " provide a (host, port) tuple or a redis url."
+            )
+            raise LookupError(msg)
+
+        # Next, ensure we know what shards to use...
+        if not shards:
+            # TODO: Read from config instead of this.
+            #       Alternatively maybe read from redis as this is somewhat
+            #       dependent on the rust backend?
+            shards = (fishmael.models.ShardId(0, 1),)
+
+        readers = [
+            fishmael.stream.ShardStreamReader.for_streams(
+                # TODO: Simple way to get all events
+                fishmael.models.ComponentInteraction,
+                fishmael.models.CommandInteraction,
+                connection=await redis.get_connection(),
+                shard=shard,
+            )
+            for shard in shards
+        ]
+
+        return cls(redis, readers)
 
     async def start(self) -> None:
         for stream_reader in self.stream_readers:
