@@ -7,7 +7,7 @@ from fishmael.models import deserialise, shard
 __all__: typing.Sequence[str] = ("ComponentInteraction",)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class ComponentInteraction:
     app_permissions: int | None
     application_id: int
@@ -19,7 +19,7 @@ class ComponentInteraction:
     id: int
     kind: int
     locale: str | None
-    message_id: int | None
+    message_id: int
     token: str
     user_id: int
     values: collections.abc.Sequence[str]
@@ -37,7 +37,7 @@ class ComponentInteraction:
             id=int(raw[b"id"]),
             kind=int(raw[b"kind"]),
             locale=deserialise.get_and_cast(raw, b"locale", bytes.decode),
-            message_id=deserialise.get_and_cast(raw, b"message_id", int),
+            message_id=int(raw[b"message_id"]),
             token=raw[b"token"].decode(),
             user_id=int(raw[b"user_id"]),
             values=deserialise.get_and_cast_or(

@@ -7,7 +7,7 @@ from fishmael.models import deserialise, shard
 __all__: collections.abc.Sequence[str] = ("CommandInteraction",)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class CommandInteraction:
     app_permissions: int | None
     application_id: int
@@ -18,7 +18,7 @@ class CommandInteraction:
     id: int
     kind: int
     locale: str | None
-    options: str
+    options: collections.abc.Mapping[str, object]
     # pub resolved_attachments: collections.abc.Sequence[str]
     resolved_channels: collections.abc.Sequence[int]
     resolved_messages: collections.abc.Sequence[int]
