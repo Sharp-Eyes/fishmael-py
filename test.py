@@ -7,12 +7,19 @@ import disagain
 import dotenv
 
 import fishmael
+import fishmael.event_manager
+import fishmael.events.base as events_base
 
 
 async def main() -> None:
     dotenv.load_dotenv()
 
     client = await Fishmael.from_env()
+
+    @client.event_manager.listen()
+    async def foo(ev: fishmael.events.InteractionEvent):  # type: ignore
+        print("omg???", ev.interaction_id)
+
     await client.start()
 
 
@@ -20,6 +27,7 @@ async def main() -> None:
 class Fishmael:
     redis: disagain.Redis
     stream_readers: collections.abc.Sequence[fishmael.stream.ShardStreamReader]
+    event_manager: fishmael.event_manager.EventManager
 
     _stream_tasks: set[asyncio.Task[None]] = dataclasses.field(
         default_factory=set,
@@ -76,7 +84,9 @@ class Fishmael:
             for shard in shards
         ]
 
-        return cls(redis, readers)
+        event_manager = fishmael.event_manager.EventManager()
+
+        return cls(redis, readers, event_manager)
 
     async def start(self) -> None:
         for stream_reader in self.stream_readers:
@@ -91,9 +101,9 @@ class Fishmael:
         await self._closing_event.wait()
 
     async def dispatch(self, streamable: fishmael.models.protocol.Streamable) -> None:
-        print("DISPATCH\n", streamable, "\n")  # noqa: T201
-
-
+        event_cls = events_base.streamable_to_event_map[type(streamable)]
+        event = event_cls(streamable)
+        await self.event_manager.dispatch(event)
 
 
 if __name__ == "__main__":
