@@ -126,7 +126,16 @@ class Fishmael:
         /,
         *,
         timeout: float | None = None,
-        predicate: event_manager_m.WaiterPredicateT[events_base.EventT] | None = None,
+        predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
     ) -> events_base.EventT:
         return await self.event_manager.wait_for(event_type, timeout=timeout, predicate=predicate)
-    
+
+    def stream(
+        self,
+        event_type: type[events_base.EventT],
+        /,
+        *,
+        timeout: float | None = None,
+        predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
+    ) -> event_manager_m.EventStream[events_base.EventT]:
+        return self.event_manager.stream(event_type, timeout=timeout, predicate=predicate)
