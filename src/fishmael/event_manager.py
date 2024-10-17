@@ -14,14 +14,16 @@ __all__: collections.abc.Sequence[str] = ("EventManager",)
 
 _LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
+DispatchPredicateT = typing.Callable[[events_base.EventT], bool]
+
 # Listeners
-ListenerMap = dict[
-    type[events_base.Event],
-    list[events_base.EventCallbackT[events_base.Event]],
+ListenerPairT = tuple[
+    DispatchPredicateT[events_base.EventT] | None,
+    events_base.EventCallbackT[events_base.Event],
 ]
+ListenerMap = dict[type[events_base.Event], set[ListenerPairT[events_base.Event]]]
 
 # Waiters
-DispatchPredicateT = typing.Callable[[events_base.EventT], bool]
 WaiterPairT = tuple[
     DispatchPredicateT[events_base.EventT] | None,
     asyncio.Future[events_base.EventT],
@@ -45,10 +47,12 @@ class EventManager:
     async def _handle_callback(
         self,
         callback: events_base.EventCallbackT[events_base.Event],
+        predicate: DispatchPredicateT[events_base.Event] | None,
         event: events_base.Event,
     ) -> None:
         try:
-            await callback(event)
+            if not predicate or predicate(event):
+                await callback(event)
 
         except Exception as exc:
             if isinstance(event, events_base.ExceptionEvent):
@@ -75,15 +79,15 @@ class EventManager:
         tasks: list[collections.abc.Coroutine[None, None, None]] = []
 
         for event_type in event.dispatches:
-            for callback in self._listeners.get(event_type, ()):
-                tasks.append(self._handle_callback(callback, event))  # noqa: PERF401
+            for predicate, callback in self._listeners.get(event_type, ()):
+                tasks.append(self._handle_callback(callback, predicate, event))
 
             for predicate, future in self._waiters.get(event_type, ()):
                 if future.done():
                     continue
 
                 try:
-                    if predicate and predicate(event):
+                    if not predicate or predicate(event):
                         future.set_result(event)
 
                 except Exception as exc:  # noqa: BLE001
@@ -94,7 +98,7 @@ class EventManager:
                     continue
 
                 try:
-                    if predicate and predicate(event):
+                    if not predicate or predicate(event):
                         stream.send(event)
 
                 except Exception as exc:  # noqa: BLE001
@@ -107,28 +111,48 @@ class EventManager:
         self,
         event_type: type[events_base.EventT],
         callback: events_base.EventCallbackT[events_base.EventT],
+        *,
+        predicate: DispatchPredicateT[events_base.EventT] | None = None,
     ) -> None:
+        pair = typing.cast(ListenerPairT[events_base.Event], (predicate, callback))
         try:
-            self._listeners[event_type].append(callback)  # pyright: ignore[reportArgumentType]
+            self._listeners[event_type].add(pair)
         except KeyError:
-            self._listeners[event_type] = [callback]  # pyright: ignore[reportArgumentType]
+            self._listeners[event_type] = {pair}
 
     def unsubscribe(
         self,
         event_type: type[events_base.EventT],
         callback: events_base.EventCallbackT[events_base.EventT],
+        *,
+        predicate: DispatchPredicateT[events_base.EventT] | None = None,
+        allow_search: bool = True,
     ) -> None:
         listeners = self._listeners.get(event_type)
         if not listeners:
             return
 
-        listeners.remove(callback)  # pyright: ignore[reportArgumentType]
+        if predicate:
+            pair = typing.cast(ListenerPairT[events_base.Event], (predicate, callback))
+            listeners.discard(pair)  # pyright: ignore[reportArgumentType]
+
+        else:
+            pair = typing.cast(ListenerPairT[events_base.Event], (None, callback))
+            if pair in listeners:
+                listeners.remove(pair)
+
+            elif allow_search:
+                for pair in listeners.copy():
+                    if pair[1] == callback:
+                        listeners.remove(pair)
+
         if not listeners:
             del self._listeners[event_type]
 
     def listen(
         self,
         *event_types: type[events_base.EventT],
+        predicate: DispatchPredicateT[events_base.EventT] | None = None,
     ) -> collections.abc.Callable[
         [events_base.EventCallbackT[events_base.EventT]],
         events_base.EventCallbackT[events_base.EventT],
@@ -165,7 +189,7 @@ class EventManager:
                     msg = f"Expected event class, got {event_type.__name__!r}"
                     raise TypeError(msg)
 
-                self.subscribe(event_type, callback)
+                self.subscribe(event_type, callback, predicate=predicate)
 
             return callback
 

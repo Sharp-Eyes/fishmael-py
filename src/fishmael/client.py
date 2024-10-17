@@ -102,24 +102,29 @@ class Fishmael:
         self,
         event_type: type[events_base.EventT],
         callback: events_base.EventCallbackT[events_base.EventT],
+        *,
+        predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
     ) -> None:
-        self.event_manager.subscribe(event_type, callback)
+        self.event_manager.subscribe(event_type, callback, predicate=predicate)
 
     def unsubscribe(
         self,
         event_type: type[events_base.EventT],
         callback: events_base.EventCallbackT[events_base.EventT],
+        *,
+        predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
     ) -> None:
-        self.event_manager.unsubscribe(event_type, callback)
+        self.event_manager.unsubscribe(event_type, callback, predicate=predicate)
 
     def listen(
         self,
         *event_types: type[events_base.EventT],
+        predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
     ) -> collections.abc.Callable[
         [events_base.EventCallbackT[events_base.EventT]],
         events_base.EventCallbackT[events_base.EventT],
     ]:
-        return self.event_manager.listen(*event_types)
+        return self.event_manager.listen(*event_types, predicate=predicate)
 
     async def wait_for(
         self,

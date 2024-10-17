@@ -17,7 +17,10 @@ async def main() -> None:
 
     # Listen and do something with all events of the provided type.
     # TODO: Maybe also support predicates?
-    @client.listen()
+    @client.listen(
+        fishmael.events.ComponentInteractionEvent,
+        predicate=lambda event: event.guild_id == 701039771157397526,
+    )
     async def foo(event: fishmael.events.ComponentInteractionEvent):
         print(event)
 
