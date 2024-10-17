@@ -9,28 +9,40 @@ logging.basicConfig(level=logging.INFO)
 
 async def main() -> None:
     dotenv.load_dotenv()
-
     client = await fishmael.Fishmael.from_env()
 
-    t = asyncio.create_task(
-        client.event_manager.wait_for(
-            fishmael.events.InteractionEvent,
-            timeout=3,
-            predicate=lambda ev: ev.interaction.user_id == 256133489454350345,
-        ),
-    )
+    # Temporary workaround to client.start() blocking forever.
+    t = asyncio.create_task(client.start())
     await asyncio.sleep(0)
-    print(client.event_manager)
 
-    client._closing_event.set()
-    await client.start()
+    # Listen and do something with all events of the provided type.
+    # TODO: Maybe also support predicates?
+    @client.listen()
+    async def foo(event: fishmael.events.ComponentInteractionEvent):
+        print(event)
 
+    # Return the next event that matches the given type and predicate, or raise
+    # asyncio.TimeoutError if nothing is found within 5 seconds.
     try:
-        print(await t)
-    except:
-        pass
+        await client.wait_for(
+            fishmael.events.CommandInteractionEvent,
+            predicate=lambda event: event.guild_id == 701039771157397526,
+            timeout=5,
+        )
+    except asyncio.TimeoutError:
+        print("Timed out!")
 
-    print(client.event_manager)
+    # Stream all events that match the given type and predicate for the next 10
+    # seconds.
+    with client.stream(
+        fishmael.events.CommandInteractionEvent,
+        predicate=lambda event: event.guild_id == 701039771157397526,
+        timeout=10,
+    ) as stream:
+        async for event in stream:
+            print(event)
+
+    await t
 
 
 if __name__ == "__main__":
