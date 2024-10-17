@@ -238,10 +238,18 @@ class EventStreamState(enum.Enum):
 @dataclasses.dataclass(slots=True)
 class EventStreamIterator(typing.Generic[events_base.EventT]):
     exception: Exception | None = dataclasses.field(default=None, init=False)
-    state: EventStreamState = dataclasses.field(default=EventStreamState.STARTING)
     queue: StreamQueue[events_base.EventT] = dataclasses.field(default_factory=asyncio.Queue)
+    state: EventStreamState = dataclasses.field(default=EventStreamState.STARTING)
 
     def __aiter__(self) -> collections.abc.AsyncIterator[events_base.EventT]:
+        if self.state is EventStreamState.STREAMING:
+            msg = "Cannot start an event streamer that is already streaming."
+            raise RuntimeError(msg)
+
+        if self.state is EventStreamState.CLOSED:
+            self.exception = None
+            self.queue = asyncio.Queue()
+
         self.state = EventStreamState.STREAMING
         return self
 
@@ -289,7 +297,10 @@ class EventStream(typing.Generic[events_base.EventT]):
             self._iterator.queue.put_nowait(None)
 
     def __enter__(self) -> EventStreamIterator[events_base.EventT]:
-        self._iterator = EventStreamIterator()
+        if self._iterator.state is EventStreamState.STREAMING:
+            msg = "Cannot enter an already streaming event streamer."
+            raise RuntimeError(msg)
+
         return self._iterator
 
     def __exit__(self, *_exc_info: object) -> None:
