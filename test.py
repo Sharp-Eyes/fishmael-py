@@ -12,16 +12,25 @@ async def main() -> None:
 
     client = await fishmael.Fishmael.from_env()
 
-    @client.listen(fishmael.events.CommandInteractionEvent)
-    async def foo(ev: fishmael.events.InteractionEvent) -> None:  # pyright: ignore[reportUnusedFunction]
-        print("omg???", ev.interaction_id)  # noqa: T201
-        raise Exception
+    t = asyncio.create_task(
+        client.event_manager.wait_for(
+            fishmael.events.InteractionEvent,
+            timeout=3,
+            predicate=lambda ev: ev.interaction.user_id == 256133489454350345,
+        ),
+    )
+    await asyncio.sleep(0)
+    print(client.event_manager)
 
-    @client.listen()
-    async def bleh(ev: fishmael.events.ExceptionEvent) -> None:  # pyright: ignore[reportUnusedFunction]
-        raise ev.exception
-
+    client._closing_event.set()
     await client.start()
+
+    try:
+        print(await t)
+    except:
+        pass
+
+    print(client.event_manager)
 
 
 if __name__ == "__main__":

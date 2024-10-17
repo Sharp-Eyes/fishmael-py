@@ -17,11 +17,15 @@ ListenerMap = dict[
     type[events_base.Event],
     list[events_base.EventCallbackT[events_base.Event]],
 ]
+WaiterPredicateT = typing.Callable[[events_base.EventT], bool]
+WaiterPairT = tuple[WaiterPredicateT[events_base.Event] | None, asyncio.Future[events_base.EventT]]
+WaiterMap = dict[type[events_base.Event], set[WaiterPairT[events_base.Event]]]
 
 
 @dataclasses.dataclass
 class EventManager:
     _listeners: ListenerMap = dataclasses.field(default_factory=dict, init=False)
+    _waiters: WaiterMap = dataclasses.field(default_factory=dict, init=False)
 
     async def _handle_callback(
         self,
@@ -55,11 +59,23 @@ class EventManager:
     def dispatch(self, event: events_base.Event) -> asyncio.Future[typing.Any]:
         tasks: list[collections.abc.Coroutine[None, None, None]] = []
 
-        for cls in event.dispatches:
-            for callback in self._listeners.get(cls, ()):
-                tasks.append(self._handle_callback(callback, event))
+        for event_type in event.dispatches:
+            for callback in self._listeners.get(event_type, ()):
+                tasks.append(self._handle_callback(callback, event))  # noqa: PERF401
 
-            # TODO: waiters
+            if event_type not in self._waiters:
+                continue
+
+            for predicate, future in self._waiters[event_type]:
+                if future.done():
+                    continue
+
+                try:
+                    if predicate and predicate(event):
+                        future.set_result(event)
+
+                except Exception as exc:  # noqa: BLE001
+                    future.set_exception(exc)
 
         return asyncio.gather(*tasks) if tasks else async_utils.create_completed_future()
 
@@ -130,3 +146,30 @@ class EventManager:
             return callback
 
         return wrapper
+
+    async def wait_for(
+        self,
+        event_type: type[events_base.EventT],
+        /,
+        *,
+        timeout: float | None = None,
+        predicate: WaiterPredicateT[events_base.EventT] | None = None,
+    ) -> events_base.EventT:
+        waiter_set: set[WaiterPairT[events_base.Event]]
+        future: asyncio.Future[events_base.EventT] = asyncio.get_running_loop().create_future()
+
+        try:
+            waiter_set = self._waiters[event_type]
+        except KeyError:
+            waiter_set = self._waiters[event_type] = set()
+
+        pair = typing.cast(WaiterPairT[events_base.Event], (predicate, future))
+        waiter_set.add(pair)
+
+        try:
+            return await asyncio.wait_for(future, timeout)
+
+        finally:
+            waiter_set.remove(pair)  # pyright: ignore[reportArgumentType]
+            if not waiter_set:
+                del self._waiters[event_type]
