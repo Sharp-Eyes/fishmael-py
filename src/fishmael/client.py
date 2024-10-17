@@ -9,6 +9,7 @@ import disagain
 from fishmael import event_manager as event_manager_m
 from fishmael import models, stream
 from fishmael.events import base as events_base
+from fishmael.events import stream as events_stream
 
 __all__: collections.abc.Sequence[str] = ("Fishmael",)
 
@@ -137,5 +138,5 @@ class Fishmael:
         *,
         timeout: float | None = None,
         predicate: event_manager_m.DispatchPredicateT[events_base.EventT] | None = None,
-    ) -> event_manager_m.EventStream[events_base.EventT]:
+    ) -> events_stream.EventStream[events_base.EventT]:
         return self.event_manager.stream(event_type, timeout=timeout, predicate=predicate)
