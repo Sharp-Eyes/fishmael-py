@@ -82,7 +82,7 @@ class Fishmael:
 
     async def start(self) -> None:
         for stream_reader in self.stream_readers:
-            task = asyncio.create_task(stream_reader.stream_with_dispatcher(self.dispatch))
+            task = asyncio.create_task(stream_reader.stream_with_dispatcher(self._dispatch_streamable))
             self._stream_tasks.add(task)
             task.add_done_callback(self._stream_tasks.discard)
 
@@ -92,10 +92,24 @@ class Fishmael:
         #       is disconnected?)
         await self._closing_event.wait()
 
-    async def dispatch(self, streamable: models.protocol.Streamable) -> None:
+    async def _dispatch_streamable(self, streamable: models.protocol.Streamable) -> None:
         event_cls = events_base.streamable_to_event_map[type(streamable)]
         event = event_cls(streamable)
         await self.event_manager.dispatch(event)
+
+    def subscribe(
+        self,
+        event_type: type[events_base.EventT],
+        callback: events_base.EventCallbackT[events_base.EventT],
+    ) -> None:
+        self.event_manager.subscribe(event_type, callback)
+
+    def unsubscribe(
+        self,
+        event_type: type[events_base.EventT],
+        callback: events_base.EventCallbackT[events_base.EventT],
+    ) -> None:
+        self.event_manager.unsubscribe(event_type, callback)
 
     def listen(
         self,
@@ -105,3 +119,14 @@ class Fishmael:
         events_base.EventCallbackT[events_base.EventT],
     ]:
         return self.event_manager.listen(*event_types)
+
+    async def wait_for(
+        self,
+        event_type: type[events_base.EventT],
+        /,
+        *,
+        timeout: float | None = None,
+        predicate: event_manager_m.WaiterPredicateT[events_base.EventT] | None = None,
+    ) -> events_base.EventT:
+        return await self.event_manager.wait_for(event_type, timeout=timeout, predicate=predicate)
+    
