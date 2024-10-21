@@ -149,6 +149,26 @@ class EventManager:
         if not listeners:
             del self._listeners[event_type]
 
+    def get_listeners(
+        self,
+        event_type: type[events_base.EventT],
+        /,
+        *,
+        polymorphic: bool = True,
+    ) -> typing.Collection[events_base.EventCallbackT[events_base.EventT]]:
+        if polymorphic:
+            listeners: list[events_base.EventCallbackT[events_base.EventT]] = []
+            for event in event_type.dispatches:
+                listeners.extend(self.get_listeners(event, polymorphic=False))
+
+            return listeners
+
+        if event_type not in self._listeners:
+            return ()
+
+        _, listeners = zip(*self._listeners[event_type], strict=True)
+        return listeners
+
     def listen(
         self,
         *event_types: type[events_base.EventT],
