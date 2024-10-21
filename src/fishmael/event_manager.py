@@ -14,28 +14,25 @@ __all__: collections.abc.Sequence[str] = ("EventManager",)
 
 _LOGGER: typing.Final[logging.Logger] = logging.getLogger(__name__)
 
-DispatchPredicateT = typing.Callable[[events_base.EventT], bool]
+_T = typing.TypeVar("_T")
+DispatchPredicateT: typing.TypeAlias = collections.abc.Callable[[events_base.EventT], bool]
+DispatchPairT: typing.TypeAlias = tuple[DispatchPredicateT[events_base.Event] | None, _T]
+DispatchMapT: typing.TypeAlias = dict[type[events_base.Event], set[DispatchPairT[_T]]]
 
 # Listeners
-ListenerPairT = tuple[
-    DispatchPredicateT[events_base.EventT] | None,
-    events_base.EventCallbackT[events_base.Event],
-]
-ListenerMap = dict[type[events_base.Event], set[ListenerPairT[events_base.Event]]]
+ListenerCallback: typing.TypeAlias = events_base.EventCallbackT[events_base.Event]
+ListenerPair: typing.TypeAlias = DispatchPairT[ListenerCallback]
+ListenerMap: typing.TypeAlias = DispatchMapT[ListenerCallback]
 
 # Waiters
-WaiterPairT = tuple[
-    DispatchPredicateT[events_base.EventT] | None,
-    asyncio.Future[events_base.EventT],
-]
-WaiterMap = dict[type[events_base.Event], set[WaiterPairT[events_base.Event]]]
+WaiterFuture: typing.TypeAlias = asyncio.Future[events_base.Event]
+WaiterPair: typing.TypeAlias = DispatchPairT[WaiterFuture]
+WaiterMap: typing.TypeAlias = DispatchMapT[WaiterFuture]
 
 # Streams
-StreamPairT: typing.TypeAlias = tuple[
-    DispatchPredicateT[events_base.EventT] | None,
-    event_stream.EventStream[events_base.EventT],
-]
-StreamMap = dict[type[events_base.Event], set[StreamPairT[events_base.Event]]]
+Stream: typing.TypeAlias = event_stream.EventStream[events_base.Event]
+StreamPair: typing.TypeAlias = DispatchPairT[Stream]
+StreamMap: typing.TypeAlias = DispatchMapT[Stream]
 
 
 @dataclasses.dataclass(slots=True)
@@ -114,7 +111,7 @@ class EventManager:
         *,
         predicate: DispatchPredicateT[events_base.EventT] | None = None,
     ) -> None:
-        pair = typing.cast(ListenerPairT[events_base.Event], (predicate, callback))
+        pair = typing.cast(ListenerPair, (predicate, callback))
         try:
             self._listeners[event_type].add(pair)
         except KeyError:
@@ -133,11 +130,11 @@ class EventManager:
             return
 
         if predicate:
-            pair = typing.cast(ListenerPairT[events_base.Event], (predicate, callback))
-            listeners.discard(pair)  # pyright: ignore[reportArgumentType]
+            pair = typing.cast(ListenerPair, (predicate, callback))
+            listeners.discard(pair)
 
         else:
-            pair = typing.cast(ListenerPairT[events_base.Event], (None, callback))
+            pair = typing.cast(ListenerPair, (None, callback))
             if pair in listeners:
                 listeners.remove(pair)
 
@@ -223,7 +220,7 @@ class EventManager:
         timeout: float | None = None,
         predicate: DispatchPredicateT[events_base.EventT] | None = None,
     ) -> events_base.EventT:
-        waiter_set: set[WaiterPairT[events_base.Event]]
+        waiter_set: set[WaiterPair]
         future: asyncio.Future[events_base.EventT] = asyncio.get_running_loop().create_future()
 
         try:
@@ -231,7 +228,7 @@ class EventManager:
         except KeyError:
             waiter_set = self._waiters[event_type] = set()
 
-        pair = typing.cast(WaiterPairT[events_base.Event], (predicate, future))
+        pair = typing.cast(WaiterPair, (predicate, future))
         waiter_set.add(pair)
 
         try:
@@ -250,7 +247,7 @@ class EventManager:
         timeout: float | None = None,
         predicate: DispatchPredicateT[events_base.EventT] | None = None,
     ) -> event_stream.EventStream[events_base.EventT]:
-        stream_set: set[StreamPairT[events_base.Event]]
+        stream_set: set[StreamPair]
         stream: event_stream.EventStream[events_base.EventT] = event_stream.EventStream()
 
         try:
@@ -258,7 +255,7 @@ class EventManager:
         except KeyError:
             stream_set = self._streams[event_type] = set()
 
-        pair = typing.cast(StreamPairT[events_base.Event], (predicate, stream))
+        pair = typing.cast(StreamPair, (predicate, stream))
         stream_set.add(pair)
         stream.add_done_callback(lambda _: stream_set.discard(pair))
 
