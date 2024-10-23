@@ -66,7 +66,7 @@ class Fishmael:
             shards = (models.ShardId(0, 1),)
 
         readers = [
-            stream.ShardStreamReader.for_streams(
+            await stream.ShardStreamReader.for_streams(
                 # TODO: Simple way to get all streamables
                 models.ComponentInteraction,
                 models.CommandInteraction,

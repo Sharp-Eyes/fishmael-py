@@ -39,15 +39,12 @@ async def main() -> None:
     #     print("Timed out!")
 
 
-    await asyncio.sleep(1)
-
-
     # Stream all events that match the given type and predicate for the next 10
     # seconds.
     with client.stream(
         fishmael.events.ComponentInteractionEvent,
         # predicate=lambda event: event.guild_id == 701039771157397526,
-        timeout=10,
+        # timeout=10,
     ) as stream:
         async with rest:
             async for event in stream:
